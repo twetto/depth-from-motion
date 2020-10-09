@@ -18,8 +18,8 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
         x, y = int(point[0]), int(point[1])
         noRotateFlow[y-hg:y+hg,x-hg:x+hg,0] = flow[y-hg:y+hg,x-hg:x+hg,0] + (u-x)
         noRotateFlow[y-hg:y+hg,x-hg:x+hg,1] = flow[y-hg:y+hg,x-hg:x+hg,1] + (v-y)
-        noRotateFlow[y-hg:y+hg,x-hg:x+hg,0] *= diff[y-hg:y+hg,x-hg:x+hg] > 1
-        noRotateFlow[y-hg:y+hg,x-hg:x+hg,1] *= diff[y-hg:y+hg,x-hg:x+hg] > 1
+        noRotateFlow[y-hg:y+hg,x-hg:x+hg,0] *= diff[y-hg:y+hg,x-hg:x+hg] > 5
+        noRotateFlow[y-hg:y+hg,x-hg:x+hg,1] *= diff[y-hg:y+hg,x-hg:x+hg] > 5
 
         # translation
         [u, v, w] = K @ Rt_translate @ np.array([point[4], point[5], point[6],1])
@@ -30,9 +30,9 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
         
         mag = LA.norm(idealVector)
         if(mag > 0.001):
-            depth[y-hg:y+hg,x-hg:x+hg] = mag / np.sqrt(noRotateFlow[y-hg:y+hg,x-hg:x+hg,0]**2+noRotateFlow[y-hg:y+hg,x-hg:x+hg,1]**2) * 320
+            depth[y-hg:y+hg,x-hg:x+hg] = mag / np.sqrt(noRotateFlow[y-hg:y+hg,x-hg:x+hg,0]**2+noRotateFlow[y-hg:y+hg,x-hg:x+hg,1]**2) * 480
         else:
-            depth[y-hg:y+hg,x-hg:x+hg] = 320
+            depth[y-hg:y+hg,x-hg:x+hg] = 480
         
         '''
         flowVector = np.array([np.mean(noRotateFlow[y-40:y+40,x-40:x+40,0]),np.mean(noRotateFlow[y-40:y+40,x-40:x+40,1])])
@@ -46,13 +46,13 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
 
 pose = open('pose.txt', 'r')
 wall = np.loadtxt('wall.txt')
-cap = cv2.VideoCapture("2020-10-07_17-26-21_small.mkv")
+cap = cv2.VideoCapture("2020-10-07_17-26-21.mkv")
 width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
 width = int(width)
 height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 height = int(height)
 focalLength = min(height, width)/2/np.tan(35/180*np.pi)
-hg = 20//2      # half grid
+hg = 40//2      # half grid
 fps = cap.get(cv2.CAP_PROP_FPS)
 print(width,height,fps,hg)
 writer = cv2.VideoWriter("output.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
@@ -172,25 +172,25 @@ for line in pose:
         
         mag = LA.norm(idealVector)
         if(mag > 0.001):
-            #depth[y-hg:y+hg,x-hg:x+hg] = mag / np.sqrt(noRotateFlow[y-hg:y+hg,x-hg:x+hg,0]**2+noRotateFlow[y-hg:y+hg,x-hg:x+hg,1]**2) * 320
-            depth[y-hg:y+hg,x-hg:x+hg] = mag / np.sqrt(flow[y-hg:y+hg,x-hg:x+hg,0]**2+flow[y-hg:y+hg,x-hg:x+hg,1]**2) * 320
+            #depth[y-hg:y+hg,x-hg:x+hg] = mag / np.sqrt(noRotateFlow[y-hg:y+hg,x-hg:x+hg,0]**2+noRotateFlow[y-hg:y+hg,x-hg:x+hg,1]**2) * 480
+            depth[y-hg:y+hg,x-hg:x+hg] = mag / np.sqrt(flow[y-hg:y+hg,x-hg:x+hg,0]**2+flow[y-hg:y+hg,x-hg:x+hg,1]**2) * 480
         else:
-            depth[y-hg:y+hg,x-hg:x+hg] = 320
+            depth[y-hg:y+hg,x-hg:x+hg] = 480
     '''
 
 
     mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
     hsv[...,0] = ang*180/np.pi/2
-    #hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
-    hsv[...,2] = 20 * mag
+    hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+    #hsv[...,2] = 6 * mag
     bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
     cv2.imshow('Flow', bgr)
     writer_flow.write(bgr)
 
     mag, ang = cv2.cartToPolar(noRotateFlow[...,0], noRotateFlow[...,1])
     hsv[...,0] = ang*180/np.pi/2
-    #hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
-    hsv[...,2] = 20 * mag
+    hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+    #hsv[...,2] = 6 * mag
     bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
     cv2.imshow('nrFlow', bgr)
     writer_nrflow.write(bgr)
@@ -203,7 +203,7 @@ for line in pose:
     #writer_attn.write(attn)
     
     #depth = cv2.normalize(depth,None,0,255,cv2.NORM_MINMAX)
-    depth *= 255 / 320
+    depth *= 255 / 480
     depth = 255 - depth
     depth = depth * (depth > 0)
     depth = depth.astype(np.uint8)

@@ -14,9 +14,9 @@ def axisEqual3D(ax):
     for ctr, dim in zip(centers, 'xyz'):
         getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
-width = 160
-height = 120
-grid = 20
+width = 640
+height = 480
+grid = 40
 focalLength = min(height, width)/2/np.tan(35/180*np.pi)
 print(focalLength)
 
@@ -58,7 +58,7 @@ for u in range(grid//2, width, grid):
     for v in range(grid//2, height, grid):
         p_frame = np.array([u, v, 1, 1]).reshape(4, 1)
         p_wall = Rt_inv @ K_inv @ p_frame
-        p_wall = p_wall / p_wall[2] * 320
+        p_wall = p_wall / p_wall[2] * 480
 
         # generate ball-like wall
         '''
