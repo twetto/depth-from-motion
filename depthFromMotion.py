@@ -16,10 +16,8 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
         w = 1.0
 
         x, y = int(point[0]), int(point[1])
-        noRotateFlow[y-hg:y+hg,x-hg:x+hg,0] = flow[y-hg:y+hg,x-hg:x+hg,0] + (u-x)
-        noRotateFlow[y-hg:y+hg,x-hg:x+hg,1] = flow[y-hg:y+hg,x-hg:x+hg,1] + (v-y)
-        noRotateFlow[y-hg:y+hg,x-hg:x+hg,0] *= diff[y-hg:y+hg,x-hg:x+hg] > 3
-        noRotateFlow[y-hg:y+hg,x-hg:x+hg,1] *= diff[y-hg:y+hg,x-hg:x+hg] > 3
+        noRotateFlow[y-hg:y+hg,x-hg:x+hg,0] = np.where(diff[y-hg:y+hg,x-hg:x+hg] > 10, flow[y-hg:y+hg,x-hg:x+hg,0] + (u-x), 0)
+        noRotateFlow[y-hg:y+hg,x-hg:x+hg,1] = np.where(diff[y-hg:y+hg,x-hg:x+hg] > 10, flow[y-hg:y+hg,x-hg:x+hg,1] + (v-y), 0)
 
         # translation
         [u, v, w] = K @ Rt_translate @ np.array([point[4], point[5], point[6],1])
