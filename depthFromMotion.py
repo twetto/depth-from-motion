@@ -8,30 +8,31 @@ from timeit import default_timer as timer
 @jit
 def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth, zd, diff):
     for point in wall:
-        
-        # rotation
-        [u, v, w] = K @ Rt_rotate @ np.array([point[4], point[5], point[6],1])
-        u = u/w
-        v = v/w
-        w = 1.0
 
         x, y = int(point[0]), int(point[1])
-        noRotateFlow[y-hg:y+hg,x-hg:x+hg,0] = np.where(diff[y-hg:y+hg,x-hg:x+hg] > 10, flow[y-hg:y+hg,x-hg:x+hg,0] + (u-x), 0)
-        noRotateFlow[y-hg:y+hg,x-hg:x+hg,1] = np.where(diff[y-hg:y+hg,x-hg:x+hg] > 10, flow[y-hg:y+hg,x-hg:x+hg,1] + (v-y), 0)
+        if(np.mean(diff[y-hg:y+hg,x-hg:x+hg]) < 5): continue
+        
+        # rotation
+        [ur, vr, wr] = K @ Rt_rotate @ np.array([point[4], point[5], point[6],1])
+        ur = ur/wr
+        vr = vr/wr
+        wr = 1.0
 
         # translation
-        [u, v, w] = K @ Rt_translate @ np.array([point[4], point[5], point[6],1])
-        u = u/w
-        v = v/w
-        w = 1.0
-        idealVector = np.array([u-x, v-y]).astype(np.float32)
-        
+        [ut, vt, wt] = K @ Rt_translate @ np.array([point[4], point[5], point[6],1])
+        ut = ut/wt
+        vt = vt/wt
+        wt = 1.0
+        idealVector = np.array([ut-x, vt-y]).astype(np.float32)
         mag = LA.norm(idealVector)
-        if(mag > 0.1):
-            depth[y-hg:y+hg,x-hg:x+hg] = mag / np.sqrt(noRotateFlow[y-hg:y+hg,x-hg:x+hg,0]**2+noRotateFlow[y-hg:y+hg,x-hg:x+hg,1]**2) * 480
-        else:
-            depth[y-hg:y+hg,x-hg:x+hg] = 480
         
+        for i in range(y-hg,y+hg):
+            for j in range(x-hg,x+hg):
+                if(diff[i,j] >= 20 and mag > 0.1):
+                    noRotateFlow[i,j,0] = flow[i,j,0] + (ur-x)
+                    noRotateFlow[i,j,1] = flow[i,j,1] + (vr-y)
+                    depth[i,j] = mag / np.sqrt(noRotateFlow[i,j,0]**2+noRotateFlow[i,j,1]**2) * 480
+
         '''
         flowVector = np.array([np.mean(noRotateFlow[y-40:y+40,x-40:x+40,0]),np.mean(noRotateFlow[y-40:y+40,x-40:x+40,1])])
         if(LA.norm(idealVector) > 0.1 and LA.norm(flowVector) > 3):
@@ -85,6 +86,9 @@ pptime, pptx, ppty, pptz, pprx, ppry = pose_skip, -13.21110, 4.00000, 77.31789, 
 
 frame_count = 0
 start = timer()
+time_flow = 0
+time_rt = 0
+time_depth = 0
 for line in pose:
     time, tx_, ty_, tz_, rx_, ry_ = line.split()
     time = float(time)
@@ -113,16 +117,20 @@ for line in pose:
             break
 
         # calculate flow
+        start_flow = timer()
         diff = cv2.absdiff(prev, curr)
         flow = dis.calc(prev, curr, None, )
+        time_flow += timer() - start_flow
         #flow[...,0] = flow[...,0] * (diff > 3)
         #flow[...,1] = flow[...,1] * (diff > 3)
         #showFrame = frame.copy()
         #attn = np.zeros_like(curr)
         noRotateFlow = np.zeros_like(flow)
         depth = np.zeros_like(curr).astype(np.float32)
+        depth += 480
         #outlier = np.zeros_like(curr).astype(np.float32)
         
+        start_rt = timer()
         # rotation in radius
         Rh = np.array([[1,            0,             0],
                       [ 0, np.cos(pfrx), -np.sin(pfrx)],
@@ -151,42 +159,45 @@ for line in pose:
         # Rt = [R|t]
         Rt_rotate = np.concatenate((Rh @ Ry @ Rx, translation_O), axis=1)
         Rt_translate = np.concatenate((RI, translation), axis=1)
+        time_rt += timer() - start_rt
         
         # get depth frame
+        start_depth = timer()
         depth = depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth, zd, diff)
+        time_depth += timer() - start_depth
 
         # some outputs
-        mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
-        hsv[...,0] = ang*180/np.pi/2
-        hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+        #mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
+        #hsv[...,0] = ang*180/np.pi/2
+        #hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
         #hsv[...,2] = 6 * mag
-        bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
-        cv2.imshow('Flow', bgr)
-        writer_flow.write(bgr)
+        #bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
+        #cv2.imshow('Flow', bgr)
+        #writer_flow.write(bgr)
 
-        mag, ang = cv2.cartToPolar(noRotateFlow[...,0], noRotateFlow[...,1])
-        hsv[...,0] = ang*180/np.pi/2
-        hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+        #mag, ang = cv2.cartToPolar(noRotateFlow[...,0], noRotateFlow[...,1])
+        #hsv[...,0] = ang*180/np.pi/2
+        #hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
         #hsv[...,2] = 6 * mag
-        bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
-        cv2.imshow('nrFlow', bgr)
-        writer_nrflow.write(bgr)
+        #bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
+        #cv2.imshow('nrFlow', bgr)
+        #writer_nrflow.write(bgr)
 
-        cv2.imshow("frame", frame)
-        writer.write(frame)
+        #cv2.imshow("frame", frame)
+        #writer.write(frame)
 
         #cv2.imshow("attn", attn)
         #attn = cv2.cvtColor(attn, cv2.COLOR_GRAY2BGR)
         #writer_attn.write(attn)
         
         #depth = cv2.normalize(depth,None,0,255,cv2.NORM_MINMAX)
-        depth *= 255 / 480
-        depth = 255 - depth
-        depth = depth * (depth > 0)
-        depth = depth.astype(np.uint8)
-        depth = cv2.applyColorMap(depth, cmapy.cmap('viridis'))
-        cv2.imshow("depth", depth)
-        writer_depth.write(depth)
+        #depth *= 255 / 480
+        #depth = 255 - depth
+        #depth = depth * (depth > 0)
+        #depth = depth.astype(np.uint8)
+        #depth = cv2.applyColorMap(depth, cmapy.cmap('viridis'))
+        #cv2.imshow("depth", depth)
+        #writer_depth.write(depth)
         
         '''
         #outlier = cv2.normalize(outlier,None,0,255,cv2.NORM_MINMAX)
@@ -216,4 +227,9 @@ writer_nrflow.release()
 writer_depth.release()
 #writer_outlier.release()
 cv2.destroyAllWindows()
-
+print("flow time:")
+print(time_flow)
+print("rigid transform time:")
+print(time_rt)
+print("compensation & depth time:")
+print(time_depth)
