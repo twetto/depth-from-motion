@@ -121,10 +121,7 @@ for line in pose:
         diff = cv2.absdiff(prev, curr)
         flow = dis.calc(prev, curr, None, )
         time_flow += timer() - start_flow
-        #flow[...,0] = flow[...,0] * (diff > 3)
-        #flow[...,1] = flow[...,1] * (diff > 3)
         #showFrame = frame.copy()
-        #attn = np.zeros_like(curr)
         noRotateFlow = np.zeros_like(flow)
         depth = np.zeros_like(curr).astype(np.float32)
         depth += 480
@@ -167,37 +164,32 @@ for line in pose:
         time_depth += timer() - start_depth
 
         # some outputs
-        #mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
-        #hsv[...,0] = ang*180/np.pi/2
-        #hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+        mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
+        hsv[...,0] = ang*180/np.pi/2
+        hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
         #hsv[...,2] = 6 * mag
-        #bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
-        #cv2.imshow('Flow', bgr)
-        #writer_flow.write(bgr)
+        bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
+        cv2.imshow('Flow', bgr)
+        writer_flow.write(bgr)
 
-        #mag, ang = cv2.cartToPolar(noRotateFlow[...,0], noRotateFlow[...,1])
-        #hsv[...,0] = ang*180/np.pi/2
-        #hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+        mag, ang = cv2.cartToPolar(noRotateFlow[...,0], noRotateFlow[...,1])
+        hsv[...,0] = ang*180/np.pi/2
+        hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
         #hsv[...,2] = 6 * mag
-        #bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
-        #cv2.imshow('nrFlow', bgr)
-        #writer_nrflow.write(bgr)
+        bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
+        cv2.imshow('nrFlow', bgr)
+        writer_nrflow.write(bgr)
 
-        #cv2.imshow("frame", frame)
-        #writer.write(frame)
+        cv2.imshow("frame", frame)
+        writer.write(frame)
 
-        #cv2.imshow("attn", attn)
-        #attn = cv2.cvtColor(attn, cv2.COLOR_GRAY2BGR)
-        #writer_attn.write(attn)
-        
-        #depth = cv2.normalize(depth,None,0,255,cv2.NORM_MINMAX)
-        #depth *= 255 / 480
-        #depth = 255 - depth
-        #depth = depth * (depth > 0)
-        #depth = depth.astype(np.uint8)
-        #depth = cv2.applyColorMap(depth, cmapy.cmap('viridis'))
-        #cv2.imshow("depth", depth)
-        #writer_depth.write(depth)
+        depth *= 255 / 480
+        depth = 255 - depth
+        depth = depth * (depth > 0)
+        depth = depth.astype(np.uint8)
+        depth = cv2.applyColorMap(depth, cmapy.cmap('viridis'))
+        cv2.imshow("depth", depth)
+        writer_depth.write(depth)
         
         '''
         #outlier = cv2.normalize(outlier,None,0,255,cv2.NORM_MINMAX)
