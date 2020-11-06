@@ -20,8 +20,8 @@ grid = 40
 focalLength = min(height, width)/2/np.tan(35/180*np.pi)
 print(focalLength)
 
-K = np.array([[focalLength, 0, width/2+0.5, 0],
-             [0, focalLength, height/2+0.5, 0],
+K = np.array([[focalLength, 0, width/2, 0],
+             [0, focalLength, height/2, 0],
              [0, 0, 1, 0],
              [0, 0, 0, 1]])
 K_inv = LA.inv(K)

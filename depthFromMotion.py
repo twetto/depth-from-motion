@@ -10,7 +10,7 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
     for point in wall:
 
         x, y = int(point[0]), int(point[1])
-        if(np.mean(diff[y-hg:y+hg,x-hg:x+hg]) < 5): continue
+        #if(np.mean(diff[y-hg:y+hg,x-hg:x+hg]) < 5): continue
         
         # rotation
         [ur, vr, wr] = K @ Rt_rotate @ np.array([point[4], point[5], point[6],1])
@@ -43,9 +43,9 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
 
     return depth
 
-pose = open('201102/pose.txt', 'r')
+pose = open('201105/pose.txt', 'r')
 wall = np.loadtxt('wall.txt')
-cap = cv2.VideoCapture("201102/video.mkv")
+cap = cv2.VideoCapture("201105/video.mkv")
 width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
 width = int(width)
 height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -62,8 +62,8 @@ writer_depth = cv2.VideoWriter("output_depth.mkv", cv2.VideoWriter_fourcc(*'MJPG
 
 dis = cv2.DISOpticalFlow_create(0)
 
-K = np.array([[focalLength, 0.0, width/2+0.5],
-             [0.0, focalLength, height/2+0.5],
+K = np.array([[focalLength, 0.0, width/2],
+             [0.0, focalLength, height/2],
              [0.0, 0.0, 1.0]])
 
 ret, frame = cap.read()
@@ -151,6 +151,7 @@ for line in pose:
     writer_nrflow.write(bgr)
 
     cv2.imshow("frame", frame)
+    cv2.imshow("pframe", prev)
     writer.write(frame)
 
     depth *= 255 / 480
@@ -170,8 +171,11 @@ for line in pose:
     writer_outlier.write(outlier)
     '''
     
-    prev = curr
-    ptime, ptx, pty, ptz, prx, pry = time, tx, ty, tz, rx, ry
+    if(abs(np.degrees(rx-prx)) > 10 or abs(np.degrees(ry-pry)) > 10 or np.sqrt((tx-ptx)**2+(ty-pty)**2+(tz-ptz)**2) > 0.2):
+        prev = curr
+        ptime, ptx, pty, ptz, prx, pry = time, tx, ty, tz, rx, ry
+    #prev = curr
+    #ptime, ptx, pty, ptz, prx, pry = time, tx, ty, tz, rx, ry
     cv2.waitKey(1)
     ret, frame = cap.read()
     end = timer()
