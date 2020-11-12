@@ -58,7 +58,7 @@ for u in range(grid//2, width, grid):
     for v in range(grid//2, height, grid):
         p_frame = np.array([u, v, 1, 1]).reshape(4, 1)
         p_wall = Rt_inv @ K_inv @ p_frame
-        p_wall = p_wall / p_wall[2] * 480
+        p_wall = p_wall / p_wall[2] * 20
 
         # generate ball-like wall
         '''

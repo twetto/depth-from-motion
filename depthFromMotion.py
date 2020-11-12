@@ -10,15 +10,14 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
     for point in wall:
 
         x, y = int(point[0]), int(point[1])
-        #if(np.mean(diff[y-hg:y+hg,x-hg:x+hg]) < 5): continue
         
-        # rotation
+        # template wall ideal rotation flow
         [ur, vr, wr] = K @ Rt_rotate @ np.array([point[4], point[5], point[6],1])
         ur = ur/wr
         vr = vr/wr
         wr = 1.0
 
-        # translation
+        # template wall translation flow
         [ut, vt, wt] = K @ Rt_translate @ np.array([point[4], point[5], point[6],1])
         ut = ut/wt
         vt = vt/wt
@@ -29,9 +28,13 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
         for i in range(y-hg,y+hg):
             for j in range(x-hg,x+hg):
                 if(diff[i,j] >= 20 and mag > 0.1):
+                    
+                    # rotation compensation
                     noRotateFlow[i,j,0] = flow[i,j,0] + (ur-x)
                     noRotateFlow[i,j,1] = flow[i,j,1] + (vr-y)
-                    depth[i,j] = mag / np.sqrt(noRotateFlow[i,j,0]**2+noRotateFlow[i,j,1]**2) * 480
+                    
+                    # depth from motion
+                    depth[i,j] = mag / np.sqrt(noRotateFlow[i,j,0]**2+noRotateFlow[i,j,1]**2) * 20
 
         '''
         flowVector = np.array([np.mean(noRotateFlow[y-40:y+40,x-40:x+40,0]),np.mean(noRotateFlow[y-40:y+40,x-40:x+40,1])])
@@ -94,7 +97,7 @@ for line in pose:
     #showFrame = frame.copy()
     noRotateFlow = np.zeros_like(flow)
     depth = np.zeros_like(curr).astype(np.float32)
-    depth += 480
+    depth += 20
     #outlier = np.zeros_like(curr).astype(np.float32)
     
     start_rt = timer()
@@ -110,11 +113,8 @@ for line in pose:
                   [ 0, np.sin(-rx),  np.cos(-rx)]])
     RI = np.eye(3, 3)
 
-    # translation in pixels (1 meter = 16 pixels in Minecraft)
+    # translation in meters
     xd, yd, zd = tx-ptx, ty-pty, tz-ptz
-    xd *= 16
-    yd *= 16
-    zd *= 16
     zd = -zd
     translation = [np.sqrt(xd**2+yd**2+zd**2)*np.sin(np.arctan2(np.sqrt(xd**2+zd**2),yd)-rx)*np.cos(np.pi/2+np.arctan2(-xd,zd)+ry),
             np.sqrt(xd**2+yd**2+zd**2)*np.cos(np.arctan2(np.sqrt(xd**2+zd**2),yd)-rx),
@@ -151,10 +151,9 @@ for line in pose:
     writer_nrflow.write(bgr)
 
     cv2.imshow("frame", frame)
-    cv2.imshow("pframe", prev)
     writer.write(frame)
 
-    depth *= 255 / 480
+    depth *= 255 / 20
     depth = 255 - depth
     depth = depth * (depth > 0)
     depth = depth.astype(np.uint8)
@@ -171,11 +170,13 @@ for line in pose:
     writer_outlier.write(outlier)
     '''
     
-    if(abs(np.degrees(rx-prx)) > 10 or abs(np.degrees(ry-pry)) > 10 or np.sqrt((tx-ptx)**2+(ty-pty)**2+(tz-ptz)**2) > 0.2):
-        prev = curr
-        ptime, ptx, pty, ptz, prx, pry = time, tx, ty, tz, rx, ry
-    #prev = curr
-    #ptime, ptx, pty, ptz, prx, pry = time, tx, ty, tz, rx, ry
+    # keyframe selection (not necessary, uncomment if you want to)
+    #if(abs(np.degrees(rx-prx)) > 1 or abs(np.degrees(ry-pry)) > 1 or np.sqrt((tx-ptx)**2+(ty-pty)**2+(tz-ptz)**2) > 0.05):
+    #    prev = curr
+    #    ptime, ptx, pty, ptz, prx, pry = time, tx, ty, tz, rx, ry
+    prev = curr
+    ptime, ptx, pty, ptz, prx, pry = time, tx, ty, tz, rx, ry
+    
     cv2.waitKey(1)
     ret, frame = cap.read()
     end = timer()
@@ -183,7 +184,9 @@ for line in pose:
     if(frame_count % fps == 0): print(1/(end - start))
     start = end
     if(ret): curr = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    else: print("Something went wrong with the video...")
+    else:
+        print("Video ends.")
+        break
 
 cap.release()
 writer.release()
