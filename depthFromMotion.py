@@ -49,7 +49,6 @@ height = int(height)
 focalLength = min(height, width)/2/np.tan(35/180*np.pi)
 hg = 40//2      # half grid
 fps = cap.get(cv2.CAP_PROP_FPS)
-print(width,height,fps,hg)
 #writer = cv2.VideoWriter("output.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
 #writer_flow = cv2.VideoWriter("output_flow.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
 #writer_nrflow = cv2.VideoWriter("output_noRotateFlow.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
@@ -69,7 +68,7 @@ hsv[...,1] = 255
 curr = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 prev = curr.copy()
 
-ptime, ptx, pty, ptz, prx, pry = 261.03900, 785.56394, 4.00000, -206.83414, np.radians(-1.35001), np.radians(176.10004)
+ptime, ptx, pty, ptz, prx, pry = 85.20800, -12.95121, 79.00000, 104.45334, np.radians(43.20006), np.radians(-145.04961)
 
 start = timer()
 frame_count = 0
