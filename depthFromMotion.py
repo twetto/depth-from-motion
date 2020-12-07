@@ -119,8 +119,8 @@ fps = cap.get(cv2.CAP_PROP_FPS)
 #writer = cv2.VideoWriter("output.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
 #writer_flow = cv2.VideoWriter("output_flow.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
 #writer_nrflow = cv2.VideoWriter("output_noRotateFlow.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
-#writer_outlier = cv2.VideoWriter("output_outlier.mkv", cv2.VideoWriter_fourcc(*'X264'),fps,(640,480))
 #writer_depth = cv2.VideoWriter("output_depth.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
+#writer_obs = cv2.VideoWriter("output_obs.mkv", cv2.VideoWriter_fourcc(*'X264'),fps,(width,height))
 
 dis = cv2.DISOpticalFlow_create(0)
 
@@ -197,26 +197,33 @@ for line in pose:
     # filter out floor
     start_contour = timer()
     fdepth = no_floor(depth, K, translation, rx, dfloor, srange, width, height)
+
+    # get contours
+    fdepth = fdepth < 3
+    fdepth = fdepth.astype(np.uint8)
+    fdepth = cv2.dilate(fdepth, np.ones((5,5)))
+    fdepth = cv2.erode(fdepth, np.ones((3,3)))
+    contours, hierarchy = cv2.findContours(fdepth, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     time_contour += timer() - start_contour
 
     # some outputs
-    mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
-    hsv[...,0] = ang*180/np.pi/2
-    hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+    #mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
+    #hsv[...,0] = ang*180/np.pi/2
+    #hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
     #hsv[...,2] = 6 * mag
-    bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
-    cv2.imshow('Flow', bgr)
+    #bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
+    #cv2.imshow('Flow', bgr)
     #writer_flow.write(bgr)
 
-    mag, ang = cv2.cartToPolar(noRotateFlow[...,0], noRotateFlow[...,1])
-    hsv[...,0] = ang*180/np.pi/2
-    hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+    #mag, ang = cv2.cartToPolar(noRotateFlow[...,0], noRotateFlow[...,1])
+    #hsv[...,0] = ang*180/np.pi/2
+    #hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
     #hsv[...,2] = 6 * mag
-    bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
-    cv2.imshow('nrFlow', bgr)
+    #bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
+    #cv2.imshow('nrFlow', bgr)
     #writer_nrflow.write(bgr)
 
-    cv2.imshow("frame", frame)
+    #cv2.imshow("frame", frame)
     #writer.write(frame)
 
     depth *= 255 / 20
@@ -227,21 +234,19 @@ for line in pose:
     cv2.imshow("depth", depth)
     #writer_depth.write(depth)
     
-    fdepth *= 255 / 20
-    fdepth = 255 - fdepth
-    fdepth = fdepth * (fdepth > 0)
-    fdepth = fdepth.astype(np.uint8)
-    fdepth = cv2.applyColorMap(fdepth, cmapy.cmap('viridis'))
-    cv2.imshow("fdepth", fdepth)
+    #fdepth *= 255 / 20
+    #fdepth = 255 - fdepth
+    #fdepth = fdepth * (fdepth > 0)
+    #fdepth = fdepth.astype(np.uint8)
+    #fdepth = cv2.applyColorMap(fdepth, cmapy.cmap('viridis'))
+    #cv2.imshow("fdepth", fdepth)
     
-    '''
-    #outlier = cv2.normalize(outlier,None,0,255,cv2.NORM_MINMAX)
-    outlier *= 255 / np.pi
-    outlier = outlier.astype(np.uint8)
-    cv2.imshow("outlier", outlier)
-    outlier = cv2.cvtColor(outlier, cv2.COLOR_GRAY2BGR)
-    writer_outlier.write(outlier)
-    '''
+    showFrame = frame.copy()
+    for i in range(len(contours)):
+        if(cv2.contourArea(contours[i]) > 2000):
+            showFrame = cv2.drawContours(showFrame, contours, i, (0,0,255), -1)
+    cv2.imshow("obstacles", showFrame)
+    #writer_obs.write(showFrame)
     
     # keyframe selection (not necessary, uncomment if you want to)
     #if(abs(np.degrees(rx-prx)) > 1 or abs(np.degrees(ry-pry)) > 1 or np.sqrt((tx-ptx)**2+(ty-pty)**2+(tz-ptz)**2) > 0.05):
@@ -254,7 +259,9 @@ for line in pose:
     ret, frame = cap.read()
     end = timer()
     frame_count += 1
-    if(frame_count % fps == 0): print(1/(end - start))
+    if(frame_count % fps == 0):
+        #print(1/(end - start))
+        None
     start = end
     if(ret): curr = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     else:
@@ -266,7 +273,7 @@ cap.release()
 #writer_flow.release()
 #writer_nrflow.release()
 #writer_depth.release()
-#writer_outlier.release()
+#writer_obs.release()
 cv2.destroyAllWindows()
 print("flow time:")
 print(time_flow)
