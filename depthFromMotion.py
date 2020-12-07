@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 from numpy import linalg as LA
+from scipy.spatial.transform import Rotation as R
 from numba import jit
 import cmapy
 from timeit import default_timer as timer
@@ -23,15 +24,16 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
         vt = vt/wt
         wt = 1.0
         idealVector = np.array([ut-x, vt-y]).astype(np.float32)
-        mag = LA.norm(idealVector)
+        #mag = LA.norm(idealVector)
+        mag = np.sqrt(idealVector[0]**2 + idealVector[1]**2)
         
         for i in range(y-hg,y+hg):
             for j in range(x-hg,x+hg):
                 if(diff[i,j] >= 20 and mag > 0.1):
                     
                     # rotation compensation
-                    noRotateFlow[i,j,0] = flow[i,j,0] + (ur-x)
-                    noRotateFlow[i,j,1] = flow[i,j,1] + (vr-y)
+                    noRotateFlow[i,j,0] = flow[i,j,0] - (ur-x)
+                    noRotateFlow[i,j,1] = flow[i,j,1] - (vr-y)
                     
                     # depth from motion
                     depth[i,j] = mag / np.sqrt(noRotateFlow[i,j,0]**2+noRotateFlow[i,j,1]**2) * 20
@@ -103,23 +105,22 @@ for line in pose:
     start_rt = timer()
     # rotation in radius
     Rh = np.array([[1,            0,             0],
-                  [ 0, np.cos(prx), -np.sin(prx)],
-                  [ 0, np.sin(prx),  np.cos(prx)]])
-    Ry = np.array([[np.cos(ry-pry), 0, np.sin(ry-pry)],
+                  [ 0, np.cos(rx), -np.sin(rx)],
+                  [ 0, np.sin(rx),  np.cos(rx)]])
+    Ry = np.array([[np.cos(pry-ry), 0, np.sin(pry-ry)],
                   [          0,      1,               0],
-                  [-np.sin(ry-pry), 0, np.cos(ry-pry)]])
+                  [-np.sin(pry-ry), 0, np.cos(pry-ry)]])
     Rx = np.array([[1,           0,            0],
-                  [ 0, np.cos(-rx), -np.sin(-rx)],
-                  [ 0, np.sin(-rx),  np.cos(-rx)]])
+                  [ 0, np.cos(-prx), -np.sin(-prx)],
+                  [ 0, np.sin(-prx),  np.cos(-prx)]])
     RI = np.eye(3, 3)
 
     # translation in meters
     xd, yd, zd = tx-ptx, ty-pty, tz-ptz
-    zd = -zd
-    translation = [np.sqrt(xd**2+yd**2+zd**2)*np.sin(np.arctan2(np.sqrt(xd**2+zd**2),yd)-rx)*np.cos(np.pi/2+np.arctan2(-xd,zd)+ry),
-            np.sqrt(xd**2+yd**2+zd**2)*np.cos(np.arctan2(np.sqrt(xd**2+zd**2),yd)-rx),
-            np.sqrt(xd**2+yd**2+zd**2)*np.sin(np.arctan2(np.sqrt(xd**2+zd**2),yd)-rx)*np.sin(np.pi/2+np.arctan2(-xd,zd)+ry)]
-    translation = np.array(translation).reshape(3, 1)
+    xd = -xd
+    yd = -yd
+    translation = np.array([xd, yd, zd]).reshape(3, 1)
+    translation = R.from_euler('x', rx).as_matrix() @ R.from_euler('y', -ry).as_matrix() @ translation
     translation_O = [0, 0, 0]
     translation_O = np.array(translation_O).reshape(3, 1)
 
