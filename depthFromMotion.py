@@ -7,7 +7,7 @@ import cmapy
 from timeit import default_timer as timer
 
 @jit
-def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth, zd, diff):
+def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth, tz, diff):
     for point in wall:
 
         x, y = int(point[0]), int(point[1])
@@ -24,7 +24,6 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
         vt = vt/wt
         wt = 1.0
         idealVector = np.array([ut-x, vt-y]).astype(np.float32)
-        #mag = LA.norm(idealVector)
         mag = np.sqrt(idealVector[0]**2 + idealVector[1]**2)
         
         for i in range(y-hg,y+hg):
@@ -38,15 +37,7 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
                     # depth from motion
                     depth[i,j] = mag / np.sqrt(noRotateFlow[i,j,0]**2+noRotateFlow[i,j,1]**2) * 20
 
-        '''
-        flowVector = np.array([np.mean(noRotateFlow[y-40:y+40,x-40:x+40,0]),np.mean(noRotateFlow[y-40:y+40,x-40:x+40,1])])
-        if(LA.norm(idealVector) > 0.1 and LA.norm(flowVector) > 3):
-            uiVector = idealVector / LA.norm(idealVector)
-            ufVector = flowVector / LA.norm(flowVector)
-            outlier[y-40:y+40,x-40:x+40] = np.arccos(np.clip(np.dot(uiVector, ufVector), -1.0, 1.0))
-        '''
-
-    return depth
+    return depth, noRotateFlow
 
 pose = open('201105/pose.txt', 'r')
 wall = np.loadtxt('wall.txt')
@@ -59,11 +50,11 @@ focalLength = min(height, width)/2/np.tan(35/180*np.pi)
 hg = 40//2      # half grid
 fps = cap.get(cv2.CAP_PROP_FPS)
 print(width,height,fps,hg)
-writer = cv2.VideoWriter("output.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
-writer_flow = cv2.VideoWriter("output_flow.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
-writer_nrflow = cv2.VideoWriter("output_noRotateFlow.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
+#writer = cv2.VideoWriter("output.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
+#writer_flow = cv2.VideoWriter("output_flow.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
+#writer_nrflow = cv2.VideoWriter("output_noRotateFlow.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
 #writer_outlier = cv2.VideoWriter("output_outlier.mkv", cv2.VideoWriter_fourcc(*'X264'),fps,(640,480))
-writer_depth = cv2.VideoWriter("output_depth.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
+#writer_depth = cv2.VideoWriter("output_depth.mkv", cv2.VideoWriter_fourcc(*'MJPG'),fps,(width,height))
 
 dis = cv2.DISOpticalFlow_create(0)
 
@@ -131,7 +122,7 @@ for line in pose:
     
     # get depth frame
     start_depth = timer()
-    depth = depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth, zd, diff)
+    depth, noRotateFlow = depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth, zd, diff)
     time_depth += timer() - start_depth
 
     # some outputs
@@ -141,7 +132,7 @@ for line in pose:
     #hsv[...,2] = 6 * mag
     bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
     cv2.imshow('Flow', bgr)
-    writer_flow.write(bgr)
+    #writer_flow.write(bgr)
 
     mag, ang = cv2.cartToPolar(noRotateFlow[...,0], noRotateFlow[...,1])
     hsv[...,0] = ang*180/np.pi/2
@@ -149,10 +140,10 @@ for line in pose:
     #hsv[...,2] = 6 * mag
     bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
     cv2.imshow('nrFlow', bgr)
-    writer_nrflow.write(bgr)
+    #writer_nrflow.write(bgr)
 
     cv2.imshow("frame", frame)
-    writer.write(frame)
+    #writer.write(frame)
 
     depth *= 255 / 20
     depth = 255 - depth
@@ -160,7 +151,7 @@ for line in pose:
     depth = depth.astype(np.uint8)
     depth = cv2.applyColorMap(depth, cmapy.cmap('viridis'))
     cv2.imshow("depth", depth)
-    writer_depth.write(depth)
+    #writer_depth.write(depth)
     
     '''
     #outlier = cv2.normalize(outlier,None,0,255,cv2.NORM_MINMAX)
@@ -190,10 +181,10 @@ for line in pose:
         break
 
 cap.release()
-writer.release()
-writer_flow.release()
-writer_nrflow.release()
-writer_depth.release()
+#writer.release()
+#writer_flow.release()
+#writer_nrflow.release()
+#writer_depth.release()
 #writer_outlier.release()
 cv2.destroyAllWindows()
 print("flow time:")
