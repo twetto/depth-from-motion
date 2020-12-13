@@ -7,7 +7,7 @@ import cmapy
 from timeit import default_timer as timer
 
 @jit
-def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth, tz, diff):
+def depth_perception(wall, K, K_inv, Rt_rotate, Rt_translate, floor, flow, noRotateFlow, depth, diff):
     for point in wall:
 
         x, y = int(point[0]), int(point[1])
@@ -26,84 +26,27 @@ def depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth
         idealVector = np.array([ut-x, vt-y]).astype(np.float32)
         mag = np.sqrt(idealVector[0]**2 + idealVector[1]**2)
         
+        # dynamically generated floor flow
+        cfloor = K_inv @ np.array([point[0], point[1], 1])
+        r = (floor[1]**2 + floor[2]**2) / (floor[0]*cfloor[0] + floor[1]*cfloor[1] + floor[2]*cfloor[2])
+        f = np.array([cfloor[0]*r, cfloor[1]*r, cfloor[2]*r, 1])
+        f *= r > 0
+        
         for i in range(y-hg,y+hg):
             for j in range(x-hg,x+hg):
-                if(diff[i,j] >= 20 and mag > 0.1):
+                if(diff[i,j] >= 20 and mag > 0.2):
                     
                     # rotation compensation
                     noRotateFlow[i,j,0] = flow[i,j,0] - (ur-x)
                     noRotateFlow[i,j,1] = flow[i,j,1] - (vr-y)
                     
                     # depth from motion
-                    depth[i,j] = mag / np.sqrt(noRotateFlow[i,j,0]**2+noRotateFlow[i,j,1]**2) * 20
+                    nRFlow = np.sqrt(noRotateFlow[i,j,0]**2+noRotateFlow[i,j,1]**2)
+                    if(nRFlow > 0):
+                        depth[i,j] = mag / nRFlow * 20
+                        if(np.abs(depth[i,j] - f[2]) < 0.8): depth[i,j] = 20
 
     return depth, noRotateFlow
-
-def no_floor(depth, K, translation, rx, dfloor, srange, width, height):
-    if (LA.norm(translation) > 0):
-        
-        # create floor from known distance and fixed sensing range
-        translation = translation.flatten()
-        n1 = translation / LA.norm(translation)
-        origin = R.from_euler('x', rx).as_matrix() @ np.array([0, dfloor, 0])
-
-        # make unit vector on XZ plane and perpendicular to translation vector
-        not_n1 = R.from_euler('x', rx).as_matrix() @ np.array([0, 1, 0])
-        if((abs(n1) == not_n1).all()):
-            not_n1 = np.array([1.0, 0, 0])
-        n2 = np.cross(n1, not_n1)
-        n2 /= LA.norm(n2)
-
-        # rotate n1 and n2 to align with YZ plane
-        n3 = np.cross(n1, n2)
-        n4 = np.cross(n3, np.array([1.0, 0, 0]))
-        n4 /= LA.norm(n4)
-        theta = np.arccos(np.clip(np.dot(n1, n4), -1.0, 1.0))
-        if(n1[0] < 0): theta *= -1
-        quat = np.array([np.sin(theta/2)*n3[0], np.sin(theta/2)*n3[1], np.sin(theta/2)*n3[2], np.cos(theta/2)])
-        r = R.from_quat(quat).as_matrix()
-        n1 = r @ n1
-        n2 = r @ n2
-
-        # create meshgrid
-        meshx, meshz = 2, 5
-        rectx = np.linspace(-srange, srange, meshx)
-        rectz = np.linspace(0, srange, meshz)
-        rectx, rectz = np.meshgrid(rectx, rectz)
-        mx = srange / (meshx-1)
-        mz = srange / (meshz-1) / 2
-
-        # generate coordinates for floor
-        X, Y, Z = [origin[i] + rectz * n1[i] + rectx * n2[i] for i in [0, 1, 2]]
-        X, Y, Z = X.flatten(), Y.flatten(), Z.flatten()
-        X = np.delete(X, np.where(Z <= 0))
-        Y = np.delete(Y, np.where(Z <= 0))
-        Z = np.delete(Z, np.where(Z <= 0))
-        
-        # floor masking
-        masks = np.zeros_like(depth, dtype=np.uint8)
-        twenty = masks + 20
-        for x, y, z in zip(X, Y, Z):
-            p = np.array([x, y, z])
-            mask = np.array([p-n1*mz-n2*mx, p-n1*mz+n2*mx, p+n1*mz+n2*mx, p+n1*mz-n2*mx])
-            if((mask[:,2] < 0).any()): continue
-            u, v, w = K @ mask.T
-            u /= w
-            v /= w
-            w = 1.0
-            pts = np.array([u, v], dtype=np.int).T
-            l, r, t, b = np.min(pts[:,0]), np.max(pts[:,0]), np.min(pts[:,1]), np.max(pts[:,1])
-            l, r = np.clip(np.array([l, r]), 0, width)
-            t, b = np.clip(np.array([t, b]), 0, height)
-            if(l == r or t == b): continue
-            sub_depth = np.abs(depth[t:b,l:r] - z) < 0.7
-            masks[t:b,l:r] = sub_depth
-        masks_inv = ~masks
-        depth *= masks_inv > 0
-        twenty *= masks > 0
-        depth = depth + twenty
-    
-    return depth
 
 
 pose = open('201105/pose.txt', 'r')
@@ -127,6 +70,7 @@ dis = cv2.DISOpticalFlow_create(0)
 K = np.array([[focalLength, 0.0, width/2],
              [0.0, focalLength, height/2],
              [0.0, 0.0, 1.0]])
+K_inv = LA.inv(K)
 
 ret, frame = cap.read()
 hsv = np.zeros_like(frame)
@@ -191,15 +135,13 @@ for line in pose:
     
     # get depth frame
     start_depth = timer()
-    depth, noRotateFlow = depth_perception(wall, K, Rt_rotate, Rt_translate, flow, noRotateFlow, depth, translation.flatten()[2], diff)
+    floor = R.from_euler('x', rx).as_matrix() @ np.array([0, 1.6, 0])
+    depth, noRotateFlow = depth_perception(wall, K, K_inv, Rt_rotate, Rt_translate, floor, flow, noRotateFlow, depth, diff)
     time_depth += timer() - start_depth
 
-    # filter out floor
-    start_contour = timer()
-    fdepth = no_floor(depth, K, translation, rx, dfloor, srange, width, height)
-
     # get contours
-    fdepth = fdepth < 3
+    start_contour = timer()
+    fdepth = depth < 3
     fdepth = fdepth.astype(np.uint8)
     fdepth = cv2.dilate(fdepth, np.ones((5,5)))
     fdepth = cv2.erode(fdepth, np.ones((3,3)))
