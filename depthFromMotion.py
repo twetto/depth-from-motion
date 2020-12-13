@@ -44,7 +44,7 @@ def depth_perception(wall, K, K_inv, Rt_rotate, Rt_translate, floor, flow, noRot
                     nRFlow = np.sqrt(noRotateFlow[i,j,0]**2+noRotateFlow[i,j,1]**2)
                     if(nRFlow > 0):
                         depth[i,j] = mag / nRFlow * 20
-                        if(np.abs(depth[i,j] - f[2]) < 0.8): depth[i,j] = 20
+                        if(np.abs(depth[i,j] - f[2]) < 0.6): depth[i,j] = 20
 
     return depth, noRotateFlow
 
@@ -81,7 +81,6 @@ prev = curr.copy()
 
 ptime, ptx, pty, ptz, prx, pry = 85.20800, -12.95121, 79.00000, 104.45334, np.radians(43.20006), np.radians(-145.04961)
 
-srange = 3
 dfloor = 1.6
 
 start = timer()
@@ -108,15 +107,9 @@ for line in pose:
     
     start_rt = timer()
     # rotation in radians
-    Rh = np.array([[1,            0,             0],
-                  [ 0, np.cos(rx), -np.sin(rx)],
-                  [ 0, np.sin(rx),  np.cos(rx)]])
-    Ry = np.array([[np.cos(pry-ry), 0, np.sin(pry-ry)],
-                  [          0,      1,               0],
-                  [-np.sin(pry-ry), 0, np.cos(pry-ry)]])
-    Rx = np.array([[1,           0,            0],
-                  [ 0, np.cos(-prx), -np.sin(-prx)],
-                  [ 0, np.sin(-prx),  np.cos(-prx)]])
+    Rh = R.from_euler('x', rx).as_matrix()
+    Ry = R.from_euler('y', pry-ry).as_matrix()
+    Rx = R.from_euler('x', -prx).as_matrix()
     RI = np.eye(3, 3)
 
     # translation from world frame to camera frame
@@ -135,7 +128,7 @@ for line in pose:
     
     # get depth frame
     start_depth = timer()
-    floor = R.from_euler('x', rx).as_matrix() @ np.array([0, 1.6, 0])
+    floor = R.from_euler('x', rx).as_matrix() @ np.array([0, dfloor, 0])
     depth, noRotateFlow = depth_perception(wall, K, K_inv, Rt_rotate, Rt_translate, floor, flow, noRotateFlow, depth, diff)
     time_depth += timer() - start_depth
 
